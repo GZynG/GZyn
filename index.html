@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gently Used Zyn Pouches</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            pointer-events: none;
+            z-index: 100;
+            text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        #clickToStart {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            font-size: 24px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        #distanceInfo {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        .sidebar {
+            position: absolute;
+            width: 200px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            border-radius: 10px;
+        }
+
+        #tokenomics {
+            top: 20px;
+            left: 20px;
+        }
+
+        #links {
+            top: 20px;
+            right: 20px;
+        }
+
+        .sidebar h2 {
+            margin-top: 0;
+            border-bottom: 1px solid white;
+            padding-bottom: 10px;
+        }
+
+        .sidebar ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .sidebar li {
+            margin-bottom: 10px;
+        }
+
+        .sidebar a {
+            color: #00ff00;
+            text-decoration: none;
+        }
+
+        .sidebar a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">Gently Used Zyn Pouches<br>Use WASD to move, Space to go up, Shift to go down, mouse to look
+        around<br>Press ESC to exit, Left Click to drop Gently Used Zyn<br>Scroll to adjust spawn distance, Hold Right
+        Click
+        and Scroll to rotate the object</div>
+    <div id="clickToStart">Click to Start</div>
+
+    <div id="tokenomics" class="sidebar">
+        <h2>Tokenomics</h2>
+        <ul>
+            <li>Supply: 1 billion</li>
+            <li>Name: Gently Used Zyn Patches</li>
+            <li>Ticker: GZYN</li>
+            <li>Tax: 0%</li>
+            <li>LP BURNED: Pumpfun Launch</li>
+            <!-- <li> This is a cto, we yoinked the web b4 old dev took it down lmeow</li> -->
+        </ul>
+    </div>
+
+    <div id="links" class="sidebar">
+        <h2>Links</h2>
+        <ul>
+            <li><a href="https://pump.fun/" target="_blank">Pumpfun</a></li>
+            <li><a href="https://t.me/" target="_blank">Telegram</a></li>
+            <li><a href="https://x.com/" target="_blank">Twitter</a></li>
+            <li><a href="https://dexscreener.com" target="_blank">Dexscreener</a></li>
+        </ul>
+    </div>
+
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.159.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.159.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.159.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.159.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
+        let scene, camera, renderer, terrain;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, moveUp = false, moveDown = false;
+        let prevTime = performance.now();
+        const velocity = new THREE.Vector3();
+        let isLocked = false;
+        let yawObject, pitchObject;
+
+        // Physics variables
+        let world, timeStep = 1 / 60;
+        let objObjects = [], objBodies = [];
+
+        // Object spawn indicator
+        let spawnIndicator;
+        let spawnDistance = 5;
+        let spawnRotation = new THREE.Euler(0, 0, 0);
+
+        // Raycaster for spawn position
+        const raycaster = new THREE.Raycaster();
+
+        // Right-click rotation
+        let isRightMouseDown = false;
+
+        // OBJ model
+        let objModel;
+        let objBoundingBox;
+
+        init();
+        animate();
+
+        function init() {
+            // Three.js initialization
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            yawObject = new THREE.Object3D();
+            pitchObject = new THREE.Object3D();
+            pitchObject.add(camera);
+            yawObject.add(pitchObject);
+            yawObject.position.y = 2;
+            scene.add(yawObject);
+
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            document.body.appendChild(renderer.domElement);
+
+            // Skybox with adjusted color
+            const skyGeometry = new THREE.SphereGeometry(500, 60, 40);
+            const skyMaterial = new THREE.MeshBasicMaterial({
+                color: 0x5999ff, // Light blue-gray color
+                side: THREE.BackSide
+            });
+            const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
+            scene.add(skybox);
+
+            // Sun image (if you want to keep it)
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load('sun.png', function (texture) {
+                const sunGeometry = new THREE.PlaneGeometry(150, 150);
+                const sunMaterial = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+                const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+                sun.position.set(-250, 200, -250);
+                sun.lookAt(scene.position);
+                scene.add(sun);
+            });
+
+            // Terrain with grass texture
+            const terrainSize = 200;
+            const geometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 100, 100);
+            textureLoader.load('grass03.png', function (texture) {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(20, 20);
+
+                const terrainMaterial = new THREE.MeshPhongMaterial({
+                    map: texture,
+                    flatShading: true
+                });
+
+                terrain = new THREE.Mesh(geometry, terrainMaterial);
+                terrain.rotation.x = -Math.PI / 2;
+                terrain.receiveShadow = true;
+                scene.add(terrain);
+            });
+
+            // Adjusted Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(-1, 0.5, -1);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 1;
+            directionalLight.shadow.camera.far = 400;
+            directionalLight.shadow.camera.top = 200;
+            directionalLight.shadow.camera.right = 200;
+            directionalLight.shadow.camera.bottom = -200;
+            directionalLight.shadow.camera.left = -200;
+            directionalLight.shadow.bias = -0.001;
+            scene.add(directionalLight);
+
+            // Load OBJ model
+            const loader = new OBJLoader();
+            loader.load(
+                'gggg.obj',
+                function (object) {
+                    objModel = object;
+                    objModel.scale.set(0.2, 0.2, 0.2);
+
+                    // Compute bounding box
+                    objBoundingBox = new THREE.Box3().setFromObject(objModel);
+
+                    // Create a visual bounding box for debugging (optional)
+                    const boxHelper = new THREE.Box3Helper(objBoundingBox, 0xffff00);
+                    scene.add(boxHelper);
+
+                    objModel.traverse(function (child) {
+                        if (child instanceof THREE.Mesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                            // Use the new color you specified
+                            child.material = new THREE.MeshPhongMaterial({
+                                color: 0xe9eef7,
+                                shininess: 30,
+                                specular: 0x111111
+                            });
+                        }
+                    });
+
+                    // Update spawn indicator to match OBJ bounding box
+                    updateSpawnIndicator();
+                },
+                function (xhr) {
+                    console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                },
+                function (error) {
+                    console.log('An error happened', error);
+                }
+            );
+
+            // Event listeners
+            document.addEventListener('keydown', onKeyDown, false);
+            document.addEventListener('keyup', onKeyUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+            document.addEventListener('click', onClick, false);
+            document.addEventListener('wheel', onWheel, false);
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mouseup', onMouseUp, false);
+            document.addEventListener('contextmenu', (e) => e.preventDefault(), false);
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            renderer.domElement.requestPointerLock = renderer.domElement.requestPointerLock ||
+                renderer.domElement.mozRequestPointerLock;
+            document.exitPointerLock = document.exitPointerLock ||
+                document.mozExitPointerLock;
+
+            document.addEventListener('pointerlockchange', lockChangeAlert, false);
+            document.addEventListener('mozpointerlockchange', lockChangeAlert, false);
+
+            const clickToStart = document.getElementById('clickToStart');
+            clickToStart.addEventListener('click', () => {
+                clickToStart.style.display = 'none';
+                lockPointer();
+            });
+
+            // Physics world initialization
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+
+            // Ground plane
+            const groundShape = new CANNON.Plane();
+            const groundBody = new CANNON.Body({ mass: 0 });
+            groundBody.addShape(groundShape);
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            world.addBody(groundBody);
+
+
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isLocked) {
+                const time = performance.now();
+                const delta = (time - prevTime) / 1000;
+
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= velocity.y * 10.0 * delta;
+
+                const speed = 2.5; // Reduced speed
+                if (moveForward) velocity.z -= speed * delta;
+                if (moveBackward) velocity.z += speed * delta;
+                if (moveLeft) velocity.x -= speed * delta;
+                if (moveRight) velocity.x += speed * delta;
+                if (moveUp) velocity.y += speed * delta;
+                if (moveDown) velocity.y -= speed * delta;
+
+                yawObject.translateX(velocity.x);
+                yawObject.translateY(velocity.y);
+                yawObject.translateZ(velocity.z);
+
+                if (yawObject.position.y < 0.1) {
+                    velocity.y = 0;
+                    yawObject.position.y = 0.1;
+                }
+
+                updateSpawnIndicator();
+
+                prevTime = time;
+            }
+
+            // Step the physics world
+            world.step(timeStep);
+
+            // Update object positions
+            for (let i = 0; i < objObjects.length; i++) {
+                objObjects[i].position.copy(objBodies[i].position);
+                objObjects[i].quaternion.copy(objBodies[i].quaternion);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'Space': moveUp = true; break;
+                case 'ShiftLeft': case 'ShiftRight': moveDown = true; break;
+                case 'Escape':
+                    if (isLocked) {
+                        document.exitPointerLock();
+                    }
+                    break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyD': moveRight = false; break;
+                case 'Space': moveUp = false; break;
+                case 'ShiftLeft': case 'ShiftRight': moveDown = false; break;
+            }
+        }
+
+        function onMouseMove(event) {
+            if (!isLocked) return;
+
+            const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+            const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+            yawObject.rotation.y -= movementX * 0.002;
+            pitchObject.rotation.x -= movementY * 0.002;
+            pitchObject.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchObject.rotation.x));
+
+            updateSpawnIndicator();
+        }
+
+        function onMouseDown(event) {
+            if (event.button === 2) { // Right mouse button
+                isRightMouseDown = true;
+            }
+        }
+
+        function onMouseUp(event) {
+            if (event.button === 2) { // Right mouse button
+                isRightMouseDown = false;
+            }
+        }
+
+        function onWheel(event) {
+            if (!isLocked) return;
+
+            if (isRightMouseDown) {
+                // Rotate the spawn indicator
+                const rotationSpeed = 0.1;
+                spawnRotation.y += event.deltaY * rotationSpeed * 0.01;
+                spawnIndicator.rotation.y = spawnRotation.y;
+            } else {
+                // Adjust spawn distance based on scroll direction
+                spawnDistance += event.deltaY * -0.01;
+
+                // Clamp spawn distance between 1 and 20
+                spawnDistance = Math.max(1, Math.min(20, spawnDistance));
+
+                updateSpawnIndicator();
+
+            }
+        }
+
+
+
+        function updateSpawnIndicator() {
+            if (objBoundingBox) {
+                // Remove old spawn indicator if it exists
+                if (spawnIndicator) scene.remove(spawnIndicator);
+
+                // Create new spawn indicator based on OBJ bounding box
+                const indicatorGeometry = new THREE.BoxGeometry(
+                    objBoundingBox.max.x - objBoundingBox.min.x,
+                    objBoundingBox.max.y - objBoundingBox.min.y,
+                    objBoundingBox.max.z - objBoundingBox.min.z
+                );
+                const indicatorMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffff00,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                spawnIndicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
+                scene.add(spawnIndicator);
+            }
+
+            // Update position
+            if (spawnIndicator) {
+                raycaster.setFromCamera(new THREE.Vector2(), camera);
+                const intersectPoint = new THREE.Vector3();
+                raycaster.ray.at(spawnDistance, intersectPoint);
+                spawnIndicator.position.copy(intersectPoint);
+                spawnIndicator.rotation.copy(spawnRotation);
+            }
+        }
+
+        function onClick(event) {
+            if (!isLocked || !objModel || !objBoundingBox) return;
+
+            const objClone = objModel.clone();
+            objClone.position.copy(spawnIndicator.position);
+            objClone.rotation.copy(spawnIndicator.rotation);
+            scene.add(objClone);
+            objObjects.push(objClone);
+
+            // Create a physics body for the object using a box shape that matches the bounding box
+            const halfExtents = new CANNON.Vec3(
+                (objBoundingBox.max.x - objBoundingBox.min.x) / 2,
+                (objBoundingBox.max.y - objBoundingBox.min.y) / 2,
+                (objBoundingBox.max.z - objBoundingBox.min.z) / 2
+            );
+            const objShape = new CANNON.Box(halfExtents);
+            const objBody = new CANNON.Body({
+                mass: 0.1,
+                shape: objShape,
+                position: new CANNON.Vec3(objClone.position.x, objClone.position.y, objClone.position.z)
+            });
+            objBody.quaternion.copy(objClone.quaternion);
+            world.addBody(objBody);
+            objBodies.push(objBody);
+        }
+
+        function lockPointer() {
+            renderer.domElement.requestPointerLock();
+        }
+
+        function lockChangeAlert() {
+            if (document.pointerLockElement === renderer.domElement ||
+                document.mozPointerLockElement === renderer.domElement) {
+                isLocked = true;
+                document.addEventListener('mousemove', onMouseMove, false);
+            } else {
+                isLocked = false;
+                document.removeEventListener('mousemove', onMouseMove, false);
+                document.getElementById('clickToStart').style.display = 'block';
+            }
+        }
+    </script>
+</body>
+
+</html>
